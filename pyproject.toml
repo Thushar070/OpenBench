@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=78"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "deeptext-lab"
+version = "0.1.0"
+description = "An educational platform for comparing text-classification models."
+readme = "README.md"
+requires-python = ">=3.15,<3.16"
+dependencies = [
+    "torch>=2.14.1",
+    "pandas>=3.1",
+    "numpy>=2.5",
+    "scikit-learn>=1.9",
+    "matplotlib>=3.11",
+    "streamlit>=1.66",
+    "datasets>=5.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.2",
+    "ruff>=0.17.3",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["deeptext*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py315"
+line-length = 88
+src = ["src", "tests"]
+exclude = [".venv", "build", "dist"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]

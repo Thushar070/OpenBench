@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Local environments and secrets
+.venv/
+venv/
+.tmp/
+*.tmp
+*.temp
+.env
+.env.*
+
+# Datasets and generated model artifacts
+datasets/
+data/raw/
+data/processed/
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+
+# Generated experiment output
+outputs/
+plots/
+logs/
+*.log
+
+# Build and package output
+build/
+dist/
+*.egg-info/
+
+# IDE and Windows files
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+
+# Project Markdown policy: README is the only non-ignored Markdown file
+*.md
+!README.md
