@@ -9,7 +9,7 @@ description = "An educational platform for comparing text-classification models.
 readme = "README.md"
 requires-python = ">=3.15,<3.16"
 dependencies = [
-    "torch>=2.14.1",
+    "torch>=2.15.0",
     "pandas>=3.1",
     "numpy>=2.5",
     "scikit-learn>=1.9",
