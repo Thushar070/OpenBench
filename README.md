@@ -1,4 +1,4 @@
-# DeepText Lab
+# OpenBench
 
 OpenBench is an educational text-classification project for comparing a
 TF-IDF and Logistic Regression baseline with a Text CNN, vanilla RNN, LSTM,
@@ -68,5 +68,26 @@ the official test split remains separate. The dataset contents are ignored
 and are not part of the project source. Validation reports exact duplicate
 labeled review texts and keeps the source files unchanged.
 
-The project is in Phase 2: dataset loading, validation, and splitting. Model
-training and the Streamlit interface remain future work.
+## Traditional baseline
+
+Run the reproducible TF-IDF and Logistic Regression comparison from the
+project root:
+
+```powershell
+python -m deeptext.experiments.baseline `
+  --dataset-dir .\datasets\aclImdb `
+  --output-dir .\outputs\baseline `
+  --seed 42
+```
+
+The runner creates a stratified 80/20 split from labeled training reviews,
+compares word unigrams and unigrams plus bigrams at two regularization
+settings, and selects by validation F1. It fits TF-IDF on training text only;
+the official test set and unlabeled reviews are not used. Each run saves one
+reloadable model pipeline and its JSON metadata under `outputs\baseline`.
+Labels are `0` for negative and `1` for positive; confusion matrices use
+`[[true_negative, false_positive], [false_negative, true_positive]]` order.
+
+Phase 3 implements the traditional baseline and shared metrics. Text
+preprocessing and the PyTorch data pipeline are Phase 4; neural models and
+the Streamlit interface remain future work.
