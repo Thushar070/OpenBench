@@ -363,6 +363,29 @@ Phase 13 reproduced Phase 7's Logistic Regression and TextCNN metrics within
 official test evaluation for the three recurrent models. These single-run
 results do not establish statistical significance or general superiority.
 
+## Phase 14 model interpretability
+
+Generate explanations for the five frozen models from the deterministic
+validation partition only:
+
+```powershell
+python -m deeptext.experiments.interpretability
+```
+
+Analysis uses CPU by default. When CUDA is available, pass `--device cuda` to
+run neural explanations on the GPU.
+
+The command checks the Phase 12 training/validation fingerprints and saved
+validation predictions, then writes a new timestamped directory under
+`outputs\interpretability\`. Outputs include exact Logistic Regression
+coefficient contributions, TextCNN filter windows, recurrent hidden-state
+traces, validated LSTM/GRU gate values, batched `<unk>` token-window occlusion,
+and cross-model pairwise explanations. The analysis does not train models,
+modify checkpoints, or load the official test split. The notebook
+`notebooks\phase_14_model_interpretability.ipynb` reviews the latest saved run
+without rerunning the analysis by default. Occlusion scores are sensitivity
+analyses and are not causal explanations.
+
 ## Local dashboard
 
 With the existing `.venv` activated, start the Streamlit app from the project
