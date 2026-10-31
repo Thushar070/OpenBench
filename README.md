@@ -386,6 +386,26 @@ modify checkpoints, or load the official test split. The notebook
 without rerunning the analysis by default. Occlusion scores are sensitivity
 analyses and are not causal explanations.
 
+## Phase 15 robustness evaluation
+
+Run the robustness analysis on the five frozen models:
+
+```powershell
+python -m deeptext.experiments.robustness --device auto
+```
+
+The automatic perturbation and author-created semantic challenge tracks are
+reported separately under `outputs\robustness\`. Automatic variants use a
+balanced sample from Phase 12's deterministic validation partition; a separate
+length-sensitivity track reports truncation and sentence ablation because
+these may remove sentiment evidence. The semantic challenge set contains 200
+balanced examples across ten categories and is documented in
+`data\robustness\README.md`. Its labels are author-intended and not
+independently adjudicated. No model is trained or tuned and the official test
+split is not loaded. The saved-output notebook is
+`notebooks\phase_15_robustness_testing.ipynb`; it does not rerun the evaluation
+unless its explicit run flag is enabled.
+
 ## Local dashboard
 
 With the existing `.venv` activated, start the Streamlit app from the project
