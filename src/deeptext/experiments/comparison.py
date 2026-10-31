@@ -44,7 +44,6 @@ from deeptext.models.baseline import (
     predict_baseline,
     predict_baseline_probabilities,
 )
-from deeptext.preprocessing.encoding import encode_text
 from deeptext.training.checkpoint import load_textcnn_checkpoint
 
 SEED = 42
@@ -109,23 +108,8 @@ def _validate_saved_split(
 def _predict_textcnn_batch(
     predictor: TextCNNSentimentPredictor, reviews: Sequence[str]
 ) -> list[int]:
-    encoded = [
-        encode_text(
-            review,
-            predictor.vocabulary,
-            max_length=predictor.model.config.max_sequence_length,
-        )
-        for review in reviews
-    ]
-    input_ids = torch.tensor(
-        [row[0] for row in encoded], dtype=torch.long, device=predictor.device
-    )
-    lengths = torch.tensor(
-        [row[1] for row in encoded], dtype=torch.long, device=predictor.device
-    )
-    with torch.inference_mode():
-        predictions = predictor.model(input_ids, lengths).argmax(dim=1)
-    return predictions.cpu().tolist()
+    predictions = predictor.predict_batch(reviews, batch_size=max(1, len(reviews)))
+    return [int(result["predicted_class"]) for result in predictions]
 
 
 def _error_category(

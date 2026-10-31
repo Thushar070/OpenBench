@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -47,29 +48,70 @@ class TextCNNSentimentPredictor:
 
     def predict(self, review: str) -> dict[str, int | str | float]:
         """Return the predicted label and finite negative/positive probabilities."""
-        input_ids, length = encode_text(
-            review,
-            self.vocabulary,
-            max_length=self.model.config.max_sequence_length,
-        )
-        input_tensor = torch.tensor([input_ids], dtype=torch.long, device=self.device)
-        length_tensor = torch.tensor([length], dtype=torch.long, device=self.device)
+        return self.predict_batch([review], batch_size=1)[0]
 
-        with torch.inference_mode():
-            logits = self.model(input_tensor, length_tensor)
-            probabilities = torch.softmax(logits, dim=1)[0].cpu().tolist()
-        if not all(math.isfinite(probability) for probability in probabilities):
-            raise RuntimeError("TextCNN produced a non-finite prediction probability.")
-        if not math.isclose(sum(probabilities), 1.0, rel_tol=1e-5, abs_tol=1e-6):
-            raise RuntimeError("TextCNN class probabilities do not sum to one.")
+    def predict_batch(
+        self,
+        reviews: Sequence[str],
+        batch_size: int = 128,
+    ) -> list[dict[str, int | str | float]]:
+        """Predict ordered raw reviews in batches without fitting preprocessing."""
+        if isinstance(reviews, str):
+            raise TypeError("reviews must be a sequence of review strings.")
+        texts = list(reviews)
+        if not all(isinstance(review, str) for review in texts):
+            raise TypeError("reviews must contain only strings.")
+        if (
+            isinstance(batch_size, bool)
+            or not isinstance(batch_size, int)
+            or batch_size < 1
+        ):
+            raise ValueError("batch_size must be a positive integer.")
 
-        predicted_class = int(torch.tensor(probabilities).argmax().item())
-        return {
-            "predicted_class": predicted_class,
-            "sentiment": LABEL_NAMES[predicted_class],
-            "negative_probability": float(probabilities[0]),
-            "positive_probability": float(probabilities[1]),
-        }
+        predictions: list[dict[str, int | str | float]] = []
+        for start in range(0, len(texts), batch_size):
+            batch = texts[start : start + batch_size]
+            encoded = [
+                encode_text(
+                    review,
+                    self.vocabulary,
+                    max_length=self.model.config.max_sequence_length,
+                )
+                for review in batch
+            ]
+            input_ids = torch.tensor(
+                [row[0] for row in encoded], dtype=torch.long, device=self.device
+            )
+            lengths = torch.tensor(
+                [row[1] for row in encoded], dtype=torch.long, device=self.device
+            )
+
+            with torch.inference_mode():
+                logits = self.model(input_ids, lengths)
+                probabilities = torch.softmax(logits, dim=1).cpu().tolist()
+                predicted_classes = logits.argmax(dim=1).cpu().tolist()
+
+            for predicted_class, class_probabilities in zip(
+                predicted_classes, probabilities, strict=True
+            ):
+                if not all(math.isfinite(value) for value in class_probabilities):
+                    raise RuntimeError(
+                        "TextCNN produced a non-finite prediction probability."
+                    )
+                if not math.isclose(
+                    sum(class_probabilities), 1.0, rel_tol=1e-5, abs_tol=1e-6
+                ):
+                    raise RuntimeError("TextCNN class probabilities do not sum to one.")
+                predicted_label = int(predicted_class)
+                predictions.append(
+                    {
+                        "predicted_class": predicted_label,
+                        "sentiment": LABEL_NAMES[predicted_label],
+                        "negative_probability": float(class_probabilities[0]),
+                        "positive_probability": float(class_probabilities[1]),
+                    }
+                )
+        return predictions
 
 
 def load_textcnn_predictor(

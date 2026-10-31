@@ -4,8 +4,9 @@ OpenBench is an educational IMDb sentiment-classification project. It compares
 a TF-IDF + Logistic Regression baseline with a PyTorch TextCNN using a reusable
 preprocessing and data pipeline, validation-based checkpointing, raw-text
 inference, and a reproducible validation comparison. The official test split
-has not been evaluated. A Streamlit interface and additional model families
-are deferred decisions, not current implementation work.
+has since been evaluated once for final reporting using the frozen artifacts.
+A Streamlit interface and additional model families are deferred decisions,
+not current implementation work.
 
 ## Environment
 
@@ -39,8 +40,8 @@ requirement calls for it.
 
 ```powershell
 python -m pytest
-ruff check src\deeptext tests notebooks\phase_6_model_comparison.ipynb
-ruff format --check src\deeptext tests notebooks\phase_6_model_comparison.ipynb
+ruff check src\deeptext tests notebooks\phase_6_model_comparison.ipynb notebooks\phase_7_final_evaluation.ipynb
+ruff format --check src\deeptext tests notebooks\phase_6_model_comparison.ipynb notebooks\phase_7_final_evaluation.ipynb
 python -m pip check
 ```
 
@@ -242,3 +243,54 @@ validation comparison, not a final test evaluation. Historical training-time
 measurements had different timing boundaries and are not directly comparable.
 
 Use the commands in **Checks** to run the current test suite and Ruff checks.
+
+## Phase 7 final held-out evaluation
+
+Phase 7 evaluated the exact saved Phase 3 Logistic Regression pipeline and
+Phase 5 TextCNN checkpoint on all 25,000 labeled reviews in the official IMDb
+test split (12,500 negative and 12,500 positive). Neither model was retrained,
+retuned, or selected using test results. The saved TF-IDF vectorizer and
+TextCNN training vocabulary were reused. Both prediction arrays align with
+the same test IDs in the loader's original order; original model artifact
+hashes matched before and after evaluation.
+
+To repeat the final evaluation into a new timestamped directory:
+
+```powershell
+python -m deeptext.experiments.final_evaluation `
+  --dataset-dir .\datasets\aclImdb `
+  --output-root .\outputs\final_evaluation
+```
+
+| Metric | TF-IDF + Logistic Regression | TextCNN |
+|---|---:|---:|
+| Accuracy | 88.064% | 84.536% |
+| Precision | 87.423% | 81.687% |
+| Recall | 88.920% | 89.032% |
+| F1 | 88.165% | 85.201% |
+| False positives | 1,599 | 2,495 |
+| False negatives | 1,385 | 1,371 |
+
+Validation minus test differences were -0.344, -0.788, +0.280, and -0.266
+percentage points for Logistic Regression accuracy, precision, recall, and F1;
+for TextCNN they were +0.384, +0.245, +0.568, and +0.393 points. These are
+observed differences for these runs, not a complete measure of generalization
+or a statistical significance test. The reconstructed validation split had
+26 unique exact-text duplicates shared with training across 28 validation
+rows; this may affect validation scores, but does not establish the cause of
+any test difference.
+
+The models both classified 19,660 test reviews correctly and both
+misclassified 1,510 reviews. Logistic Regression alone was correct on 2,356
+reviews; TextCNN alone was correct on 1,474. They predicted different classes
+on 3,830 reviews. The result directory
+`outputs\final_evaluation\imdb-final-evaluation-20261031T075001.786903Z`
+contains full aligned predictions without review text, a classification
+report, selected error examples with original test IDs and text snippets
+truncated to 400 characters, metadata, and seven plots. The notebook
+`notebooks\phase_7_final_evaluation.ipynb` verifies the saved results and
+spot-checks both model artifacts without training.
+
+The official test split is reserved for final reporting and must not be used
+for future model training, tuning, checkpoint selection, or preprocessing
+fitting.

@@ -7,7 +7,10 @@ from torch import nn
 from torch.utils.data import DataLoader
 
 from deeptext.data.torch_dataset import TextReviewDataset, create_data_loaders
-from deeptext.inference.predictor import load_textcnn_predictor
+from deeptext.inference.predictor import (
+    TextCNNSentimentPredictor,
+    load_textcnn_predictor,
+)
 from deeptext.models.cnn import TextCNN, TextCNNConfig
 from deeptext.preprocessing.vocabulary import Vocabulary
 from deeptext.training.checkpoint import (
@@ -299,6 +302,27 @@ def test_predictor_handles_unknown_empty_text_and_preserves_weights(
             original_parameters, predictor.model.parameters(), strict=True
         )
     )
+
+
+def test_predictor_batch_preserves_order_and_matches_single_predictions() -> None:
+    vocabulary, _, _ = _training_fixture()
+    predictor = TextCNNSentimentPredictor(
+        _training_model(vocabulary), vocabulary, device="cpu"
+    )
+    reviews = ["excellent warm story", "", "unseen token", "awful dull story"]
+
+    batched = predictor.predict_batch(reviews, batch_size=2)
+    individual = [predictor.predict(review) for review in reviews]
+
+    assert [result["predicted_class"] for result in batched] == [
+        result["predicted_class"] for result in individual
+    ]
+    assert np.allclose(
+        [result["positive_probability"] for result in batched],
+        [result["positive_probability"] for result in individual],
+        atol=1e-6,
+    )
+    assert predictor.predict_batch([], batch_size=2) == []
 
 
 def test_training_checkpoint_is_best_validation_f1_and_loads_on_cpu(
