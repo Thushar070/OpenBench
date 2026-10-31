@@ -1,12 +1,11 @@
 # OpenBench
 
 OpenBench is an educational IMDb sentiment-classification project. It includes
-a TF-IDF + Logistic Regression baseline and PyTorch TextCNN, with vanilla RNN,
-LSTM, and GRU experiments authorized for a shared validation comparison. The
-official test split was used once to evaluate the frozen baseline and TextCNN
-artifacts. Recurrent models are evaluated on training/validation data only;
-the test split remains reserved for a separately authorized evaluation. The
-Phase 8 Streamlit dashboard is preserved but further UI work is paused.
+a TF-IDF + Logistic Regression baseline and four PyTorch neural models:
+TextCNN, vanilla RNN, LSTM, and GRU. All five saved models have validation
+comparisons and a unified final evaluation on the 25,000-review official test
+split. The Phase 8 Streamlit dashboard is preserved but further UI work is
+paused.
 
 ## Environment
 
@@ -40,8 +39,8 @@ requirement calls for it.
 
 ```powershell
 python -m pytest
-ruff check src\deeptext tests notebooks\phase_6_model_comparison.ipynb notebooks\phase_7_final_evaluation.ipynb
-ruff format --check src\deeptext tests notebooks\phase_6_model_comparison.ipynb notebooks\phase_7_final_evaluation.ipynb
+ruff check src\deeptext tests notebooks\phase_6_model_comparison.ipynb notebooks\phase_7_final_evaluation.ipynb notebooks\phase_13_final_test_evaluation.ipynb
+ruff format --check src\deeptext tests notebooks\phase_6_model_comparison.ipynb notebooks\phase_7_final_evaluation.ipynb notebooks\phase_13_final_test_evaluation.ipynb
 python -m pip check
 ```
 
@@ -291,9 +290,9 @@ truncated to 400 characters, metadata, and seven plots. The notebook
 `notebooks\phase_7_final_evaluation.ipynb` verifies the saved results and
 spot-checks both model artifacts without training.
 
-The official test split is reserved for final reporting and must not be used
-for future model training, tuning, checkpoint selection, or preprocessing
-fitting.
+The official test split has been used only for final reporting in Phases 7 and
+13. Do not reuse it for model training, tuning, checkpoint selection,
+preprocessing fitting, or additional model selection.
 
 ## Recurrent architecture experiments
 
@@ -302,7 +301,7 @@ Phase 12 comparison covers Logistic Regression, TextCNN, vanilla RNN, LSTM,
 and GRU on one shared validation split. Its runner consumes saved predictions,
 checks validation row IDs against the deterministic split, and reports
 validation metrics, pairwise error categories, artifact sizes, and optional
-inference benchmarks. The shared training runner uses the labeled official
+inference benchmarks. The recurrent training runner uses the labeled official
 training partition only, reconstructs the seeded 20,000/5,000 split, fits
 vocabulary on training text, selects checkpoints by validation F1, and writes a
 new run directory. It does not load the official test split.
@@ -332,6 +331,37 @@ python -m deeptext.experiments.neural_comparison
 The comparison writes a timestamped JSON report under
 `outputs\neural_comparison\`; pass `--no-benchmark` to skip inference timing.
 The reviewable summary notebook is `notebooks\phase_12_neural_comparison.ipynb`.
+
+## Phase 13 final test evaluation
+
+Evaluate all five saved models on the official test split without retraining or
+fitting preprocessing:
+
+```powershell
+python -m deeptext.experiments.phase_13_final_evaluation
+```
+
+This checks all 25,000 test IDs and labels, writes per-model predictions,
+metrics, classification reports, confusion matrices, selected text examples,
+pairwise agreement, model/artifact details, and CPU/CUDA inference benchmarks
+to a new directory under `outputs\final_evaluation\`. Source model hashes are
+checked before and after the run. The notebook
+`notebooks\phase_13_final_test_evaluation.ipynb` reviews those saved outputs;
+its optional full-evaluation cell is disabled by default to avoid repeating a
+completed test run.
+
+| Model | Test accuracy | Test F1 |
+|---|---:|---:|
+| TF-IDF + Logistic Regression | 88.064% | 88.165% |
+| TextCNN | 84.536% | 85.201% |
+| Vanilla RNN | 65.632% | 66.783% |
+| LSTM | 81.644% | 82.225% |
+| GRU | 84.800% | 84.672% |
+
+Phase 13 reproduced Phase 7's Logistic Regression and TextCNN metrics within
+1e-12 and all their test prediction labels exactly. Phase 13 is the first
+official test evaluation for the three recurrent models. These single-run
+results do not establish statistical significance or general superiority.
 
 ## Local dashboard
 
