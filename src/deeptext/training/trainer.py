@@ -14,6 +14,7 @@ from torch.utils.data import DataLoader
 
 from deeptext.evaluation.metrics import evaluate_binary_predictions
 from deeptext.models.cnn import TextCNN
+from deeptext.models.recurrent import RECURRENT_MODELS
 from deeptext.training.checkpoint import CheckpointManager
 from deeptext.training.early_stopping import EarlyStopping
 
@@ -186,17 +187,21 @@ def _snapshot_state_dict(model: nn.Module) -> dict[str, Tensor]:
     }
 
 
-def train_textcnn(
-    model: TextCNN,
+def train_neural_model(
+    model: nn.Module,
     training_loader: DataLoader,
     validation_loader: DataLoader,
     config: TrainingConfig | None = None,
     loss_function: nn.Module | None = None,
     checkpoint_manager: CheckpointManager | None = None,
 ) -> TrainingResult:
-    """Train TextCNN with Adam, validation-F1 early stopping, and best restore."""
-    if not isinstance(model, TextCNN):
-        raise TypeError("model must be a TextCNN instance.")
+    """Train a supported text model with validation-F1 early stopping."""
+    supported_models = (TextCNN, *RECURRENT_MODELS.values())
+    if not isinstance(model, supported_models):
+        supported_names = ", ".join(
+            model_type.__name__ for model_type in supported_models
+        )
+        raise TypeError(f"model must be one of: {supported_names}.")
     for name, loader in (
         ("training_loader", training_loader),
         ("validation_loader", validation_loader),
@@ -268,4 +273,25 @@ def train_textcnn(
         stopping_reason=stopping_reason,
         device=str(target_device),
         training_duration_seconds=time.perf_counter() - started,
+    )
+
+
+def train_textcnn(
+    model: TextCNN,
+    training_loader: DataLoader,
+    validation_loader: DataLoader,
+    config: TrainingConfig | None = None,
+    loss_function: nn.Module | None = None,
+    checkpoint_manager: CheckpointManager | None = None,
+) -> TrainingResult:
+    """Compatibility entry point for the existing TextCNN experiment."""
+    if not isinstance(model, TextCNN):
+        raise TypeError("model must be a TextCNN instance.")
+    return train_neural_model(
+        model,
+        training_loader,
+        validation_loader,
+        config=config,
+        loss_function=loss_function,
+        checkpoint_manager=checkpoint_manager,
     )

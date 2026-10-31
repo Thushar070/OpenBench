@@ -8,27 +8,33 @@ from pathlib import Path
 from typing import Any
 
 import torch
+from torch import nn
 
 from deeptext.models.cnn import TextCNN
+from deeptext.models.recurrent import RECURRENT_MODELS
 from deeptext.preprocessing.encoding import encode_text
 from deeptext.preprocessing.vocabulary import Vocabulary
-from deeptext.training.checkpoint import load_textcnn_checkpoint
+from deeptext.training.checkpoint import (
+    load_recurrent_checkpoint,
+    load_textcnn_checkpoint,
+)
 
 LABEL_NAMES = {0: "negative", 1: "positive"}
 
 
-class TextCNNSentimentPredictor:
-    """Predict sentiment and class probabilities for one raw review at a time."""
+class NeuralSentimentPredictor:
+    """Predict binary sentiment with a saved length-aware neural model."""
 
     def __init__(
         self,
-        model: TextCNN,
+        model: nn.Module,
         vocabulary: Vocabulary,
         device: str | torch.device = "cpu",
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        if not isinstance(model, TextCNN):
-            raise TypeError("model must be a TextCNN instance.")
+        supported_models = (TextCNN, *RECURRENT_MODELS.values())
+        if not isinstance(model, supported_models):
+            raise TypeError("model must be a supported text-classification model.")
         if not isinstance(vocabulary, Vocabulary):
             raise TypeError("vocabulary must be a built Vocabulary instance.")
         if model.config.vocab_size != vocabulary.size:
@@ -114,6 +120,36 @@ class TextCNNSentimentPredictor:
         return predictions
 
 
+class TextCNNSentimentPredictor(NeuralSentimentPredictor):
+    """Raw-review predictor restricted to a TextCNN model."""
+
+    def __init__(
+        self,
+        model: TextCNN,
+        vocabulary: Vocabulary,
+        device: str | torch.device = "cpu",
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        if not isinstance(model, TextCNN):
+            raise TypeError("model must be a TextCNN instance.")
+        super().__init__(model, vocabulary, device, metadata)
+
+
+class RecurrentSentimentPredictor(NeuralSentimentPredictor):
+    """Raw-review predictor restricted to vanilla RNN, LSTM, or GRU models."""
+
+    def __init__(
+        self,
+        model: nn.Module,
+        vocabulary: Vocabulary,
+        device: str | torch.device = "cpu",
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        if type(model).__name__ not in RECURRENT_MODELS:
+            raise TypeError("model must be a vanilla RNN, LSTM, or GRU instance.")
+        super().__init__(model, vocabulary, device, metadata)
+
+
 def load_textcnn_predictor(
     run_directory: str | Path,
     device: str | torch.device = "cpu",
@@ -121,3 +157,12 @@ def load_textcnn_predictor(
     """Load a trusted run directory and prepare its model for inference."""
     model, vocabulary, metadata = load_textcnn_checkpoint(run_directory, device)
     return TextCNNSentimentPredictor(model, vocabulary, device, metadata)
+
+
+def load_recurrent_predictor(
+    run_directory: str | Path,
+    device: str | torch.device = "cpu",
+) -> RecurrentSentimentPredictor:
+    """Load a local recurrent-model run for raw-review inference."""
+    model, vocabulary, metadata = load_recurrent_checkpoint(run_directory, device)
+    return RecurrentSentimentPredictor(model, vocabulary, device, metadata)

@@ -1,12 +1,12 @@
 # OpenBench
 
-OpenBench is an educational IMDb sentiment-classification project. It compares
-a TF-IDF + Logistic Regression baseline with a PyTorch TextCNN using a reusable
-preprocessing and data pipeline, validation-based checkpointing, raw-text
-inference, and a reproducible validation comparison. The official test split
-has since been evaluated once for final reporting using the frozen artifacts.
-A Streamlit interface and additional model families are deferred decisions,
-not current implementation work.
+OpenBench is an educational IMDb sentiment-classification project. It includes
+a TF-IDF + Logistic Regression baseline and PyTorch TextCNN, with vanilla RNN,
+LSTM, and GRU experiments authorized for a shared validation comparison. The
+official test split was used once to evaluate the frozen baseline and TextCNN
+artifacts. Recurrent models are evaluated on training/validation data only;
+the test split remains reserved for a separately authorized evaluation. The
+Phase 8 Streamlit dashboard is preserved but further UI work is paused.
 
 ## Environment
 
@@ -294,3 +294,65 @@ spot-checks both model artifacts without training.
 The official test split is reserved for final reporting and must not be used
 for future model training, tuning, checkpoint selection, or preprocessing
 fitting.
+
+## Recurrent architecture experiments
+
+Phases 9–11 completed vanilla RNN, LSTM, and GRU validation experiments. The
+Phase 12 comparison covers Logistic Regression, TextCNN, vanilla RNN, LSTM,
+and GRU on one shared validation split. Its runner consumes saved predictions,
+checks validation row IDs against the deterministic split, and reports
+validation metrics, pairwise error categories, artifact sizes, and optional
+inference benchmarks. The shared training runner uses the labeled official
+training partition only, reconstructs the seeded 20,000/5,000 split, fits
+vocabulary on training text, selects checkpoints by validation F1, and writes a
+new run directory. It does not load the official test split.
+
+To run one architecture from the project root with the existing `.venv`:
+
+```powershell
+python -m deeptext.experiments.recurrent --architecture rnn --device auto
+python -m deeptext.experiments.recurrent --architecture lstm --device auto
+python -m deeptext.experiments.recurrent --architecture gru --device auto
+```
+
+Each run saves its model, training vocabulary, history, reproducibility
+metadata, and ordered validation predictions under `outputs\recurrent\`.
+The initial configuration uses 100-dimensional embeddings, 100 hidden units,
+one unidirectional recurrent layer, dropout 0.5, sequence length 200, batch
+size 32, seed 42, and validation-F1 early stopping. Run architectures in the
+roadmap order; each full run can take several minutes on Windows.
+
+Run the saved five-model validation comparison after the three recurrent runs
+and the Phase 6 artifacts are present:
+
+```powershell
+python -m deeptext.experiments.neural_comparison
+```
+
+The comparison writes a timestamped JSON report under
+`outputs\neural_comparison\`; pass `--no-benchmark` to skip inference timing.
+The reviewable summary notebook is `notebooks\phase_12_neural_comparison.ipynb`.
+
+## Local dashboard
+
+With the existing `.venv` activated, start the Streamlit app from the project
+root. Node.js/npm is needed only if you need to rebuild the bundled Three.js
+scene asset:
+
+```powershell
+python -m streamlit run src\deeptext\dashboard\app.py
+```
+
+To rebuild the local scene bundle:
+
+```powershell
+npm ci --prefix frontend
+npm run --prefix frontend build
+```
+
+The app reads saved experiment summaries under `outputs\` and does not load
+the review dataset, load model checkpoints, or start training on startup. The
+dashboard currently includes the verified Phase 7 test summary, comparison
+chart, confusion matrices, saved experiment table, and interactive 3D pipeline
+scene. Models, Experiments, Model Comparison, Analysis, Sentiment Playground,
+Dataset, and About remain clearly identified as incremental placeholders.

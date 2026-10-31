@@ -15,6 +15,7 @@ dependencies = [
     "scikit-learn>=1.9",
     "matplotlib>=3.11",
     "streamlit>=1.66",
+    "altair>=6.0,<7",
     "datasets>=5.1",
 ]
 
@@ -27,6 +28,9 @@ dev = [
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["deeptext*"]
+
+[tool.setuptools.package-data]
+"deeptext.dashboard" = ["static/*.css", "static/*.js"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

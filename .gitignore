@@ -8,6 +8,7 @@ __pycache__/
 # Local environments and secrets
 .venv/
 venv/
+node_modules/
 .tmp/
 *.tmp
 *.temp

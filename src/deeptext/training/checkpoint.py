@@ -9,8 +9,10 @@ from pathlib import Path
 from typing import Any
 
 import torch
+from torch import nn
 
 from deeptext.models.cnn import TextCNN, TextCNNConfig
+from deeptext.models.recurrent import RECURRENT_MODELS, RecurrentConfig
 from deeptext.preprocessing.vocabulary import Vocabulary
 
 
@@ -27,7 +29,7 @@ class CheckpointManager:
 
     def save_best(
         self,
-        model: TextCNN,
+        model: nn.Module,
         epoch: int,
         validation_metrics: dict[str, float],
     ) -> bool:
@@ -39,12 +41,16 @@ class CheckpointManager:
             )
         if isinstance(epoch, bool) or not isinstance(epoch, int) or epoch < 1:
             raise ValueError("epoch must be a positive integer.")
+        model_config = getattr(model, "config", None)
+        if not callable(getattr(model_config, "to_dict", None)):
+            raise TypeError("model must expose a JSON-serializable config.")
         if self.best_validation_f1 is not None and score <= self.best_validation_f1:
             return False
 
         checkpoint = {
             "format_version": 1,
-            "model_config": model.config.to_dict(),
+            "model_type": type(model).__name__,
+            "model_config": model_config.to_dict(),
             "state_dict": {
                 name: tensor.detach().cpu().clone()
                 for name, tensor in model.state_dict().items()
@@ -93,10 +99,10 @@ def _write_json_atomically(path: Path, value: dict[str, Any]) -> None:
     os.replace(temporary_path, path)
 
 
-def load_textcnn_checkpoint(
+def load_neural_checkpoint(
     run_directory: str | Path,
     device: str | torch.device = "cpu",
-) -> tuple[TextCNN, Vocabulary, dict[str, Any]]:
+) -> tuple[nn.Module, Vocabulary, dict[str, Any]]:
     """Load a trusted local checkpoint, vocabulary, and run metadata.
 
     The weights file contains only tensors and primitive configuration values
@@ -108,7 +114,9 @@ def load_textcnn_checkpoint(
     metadata_path = source / "metadata.json"
     for required_path in (checkpoint_path, vocabulary_path, metadata_path):
         if not required_path.is_file():
-            raise FileNotFoundError(f"TextCNN artifact file not found: {required_path}")
+            raise FileNotFoundError(
+                f"Neural model artifact file not found: {required_path}"
+            )
 
     target_device = torch.device(device)
     if target_device.type == "cuda" and not torch.cuda.is_available():
@@ -126,17 +134,47 @@ def load_textcnn_checkpoint(
     if not isinstance(config_data, dict) or not isinstance(state_dict, dict):
         raise ValueError("TextCNN checkpoint is missing its configuration or weights.")
 
-    config = TextCNNConfig.from_dict(config_data)
+    model_type = checkpoint.get("model_type", "TextCNN")
+    if model_type == "TextCNN":
+        config = TextCNNConfig.from_dict(config_data)
+        model: nn.Module = TextCNN(config)
+    elif model_type in RECURRENT_MODELS:
+        config = RecurrentConfig.from_dict(config_data)
+        model = RECURRENT_MODELS[model_type](config)
+    else:
+        raise ValueError(f"Checkpoint model type is unsupported: {model_type!r}.")
     vocabulary = Vocabulary.load(vocabulary_path)
     if config.vocab_size != vocabulary.size:
         raise ValueError("Checkpoint vocabulary size does not match vocabulary.json.")
     if config.padding_idx != vocabulary.pad_id:
         raise ValueError("Checkpoint padding ID does not match vocabulary.json.")
 
-    model = TextCNN(config).to(target_device)
+    model = model.to(target_device)
     model.load_state_dict(state_dict, strict=True)
     model.eval()
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     if not isinstance(metadata, dict):
         raise ValueError("TextCNN metadata must contain a JSON object.")
+    return model, vocabulary, metadata
+
+
+def load_textcnn_checkpoint(
+    run_directory: str | Path,
+    device: str | torch.device = "cpu",
+) -> tuple[TextCNN, Vocabulary, dict[str, Any]]:
+    """Load a saved TextCNN and reject checkpoints for other neural models."""
+    model, vocabulary, metadata = load_neural_checkpoint(run_directory, device)
+    if not isinstance(model, TextCNN):
+        raise ValueError("Checkpoint does not contain a TextCNN model.")
+    return model, vocabulary, metadata
+
+
+def load_recurrent_checkpoint(
+    run_directory: str | Path,
+    device: str | torch.device = "cpu",
+) -> tuple[nn.Module, Vocabulary, dict[str, Any]]:
+    """Load a saved vanilla RNN, LSTM, or GRU and its training vocabulary."""
+    model, vocabulary, metadata = load_neural_checkpoint(run_directory, device)
+    if type(model).__name__ not in RECURRENT_MODELS:
+        raise ValueError("Checkpoint does not contain a recurrent model.")
     return model, vocabulary, metadata
