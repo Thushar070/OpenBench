@@ -1,10 +1,11 @@
 # OpenBench
 
-OpenBench is an educational IMDb sentiment-classification project. It includes
-a TF-IDF and Logistic Regression baseline, reusable text preprocessing and
-PyTorch data pipelines, and a trainable TextCNN with validation-based
-checkpointing and raw-text inference. Recurrent models and the Streamlit
-interface remain future work.
+OpenBench is an educational IMDb sentiment-classification project. It compares
+a TF-IDF + Logistic Regression baseline with a PyTorch TextCNN using a reusable
+preprocessing and data pipeline, validation-based checkpointing, raw-text
+inference, and a reproducible validation comparison. The official test split
+has not been evaluated. A Streamlit interface and additional model families
+are deferred decisions, not current implementation work.
 
 ## Environment
 
@@ -38,7 +39,8 @@ requirement calls for it.
 
 ```powershell
 python -m pytest
-ruff check .
+ruff check src\deeptext tests notebooks\phase_6_model_comparison.ipynb
+ruff format --check src\deeptext tests notebooks\phase_6_model_comparison.ipynb
 python -m pip check
 ```
 
@@ -90,12 +92,12 @@ Labels are `0` for negative and `1` for positive; confusion matrices use
 `[[true_negative, false_positive], [false_negative, true_positive]]` order.
 
 Phase 3 implements the traditional baseline and shared metrics. Text
-preprocessing and the PyTorch data pipeline are implemented in Phase 4. No
-neural model training has been started.
+preprocessing and the PyTorch data pipeline are implemented in Phase 4.
+Phase 5 adds the TextCNN training and inference path.
 
 ## Text preprocessing and PyTorch data pipeline
 
-Phase 4 provides a small, consistent pipeline for future neural experiments:
+Phase 4 provides the small, consistent text pipeline used by the TextCNN:
 
 - `normalize_text` removes HTML markup, decodes entities, lowercases text,
   normalizes Unicode, and collapses whitespace. Punctuation and negation are
@@ -208,11 +210,35 @@ reviews. These are validation results from one run, not official test results
 or a claim of generalization. Artifacts are under
 `outputs\textcnn\imdb-textcnn-20261030T122328.015737Z`.
 
-Run the regression suite and Ruff checks with:
+## Phase 6 model comparison
+
+Compare the saved Phase 3 Logistic Regression and Phase 5 TextCNN artifacts
+on the same reconstructed validation split. The comparison reads only the
+labeled IMDb training partition; it does not load the official test or
+unlabeled reviews, retrain either model, or overwrite the original runs.
 
 ```powershell
-New-Item -ItemType Directory -Path .tmp -Force | Out-Null
-python -m pytest --basetemp .tmp\pytest-phase5
-ruff check src\deeptext tests
-ruff format --check src\deeptext tests
+python -m deeptext.experiments.comparison `
+  --dataset-dir .\datasets\aclImdb `
+  --baseline-run .\outputs\baseline\imdb-baseline-20261030T110055.976336Z `
+  --textcnn-run .\outputs\textcnn\imdb-textcnn-20261030T122328.015737Z `
+  --output-dir .\outputs\comparison
 ```
+
+Each run saves JSON metrics and audit details, row-aligned validation
+predictions, error-analysis examples, confusion matrices, metric and
+performance plots, artifact sizes, and the saved TextCNN learning curves in a
+new timestamped directory. Run `notebooks\phase_6_model_comparison.ipynb` for
+the reviewable walkthrough. It loads existing artifacts and results; it does
+not train models.
+
+On the recorded 5,000-review validation split, Logistic Regression achieved
+87.72% accuracy and 0.8790 F1; TextCNN achieved 84.92% accuracy and 0.8559 F1.
+TextCNN recall was higher (89.60% vs. 89.20%) and it had fewer false negatives
+(260 vs. 270), alongside more false positives. Exact duplicate review text
+appears in both training and validation data (26 unique reviews across 28
+validation rows), so validation scores may be optimistic. This is a single
+validation comparison, not a final test evaluation. Historical training-time
+measurements had different timing boundaries and are not directly comparable.
+
+Use the commands in **Checks** to run the current test suite and Ruff checks.
