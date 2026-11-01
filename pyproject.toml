@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "deeptext-lab"
 version = "0.1.0"
-description = "An educational platform for comparing text-classification models."
+description = "Local research dashboard for evaluating IMDb sentiment models."
 readme = "README.md"
 requires-python = ">=3.15,<3.16"
 dependencies = [
@@ -14,23 +14,22 @@ dependencies = [
     "numpy>=2.5",
     "scikit-learn>=1.9",
     "matplotlib>=3.11",
-    "streamlit>=1.66",
-    "altair>=6.0,<7",
-    "datasets>=5.1",
+    "fastapi>=0.115",
+    "pydantic>=2.7",
+    "psutil>=6.0",
+    "uvicorn>=0.34",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=9.2",
     "ruff>=0.17.3",
+    "httpx>=0.27",
 ]
 
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["deeptext*"]
-
-[tool.setuptools.package-data]
-"deeptext.dashboard" = ["static/*.css", "static/*.js"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -42,6 +41,46 @@ target-version = "py315"
 line-length = 88
 src = ["src", "tests"]
 exclude = [".venv", "build", "dist"]
+respect-gitignore = true
+extend-exclude = [
+    ".aws",
+    ".azure",
+    ".cache",
+    ".conda",
+    ".credentials",
+    ".gcloud",
+    ".hypothesis",
+    ".mypy_cache",
+    ".next",
+    ".nox",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".secrets",
+    ".ssh",
+    ".tox",
+    ".venv*",
+    ".virtualenv*",
+    "__pypackages__",
+    "checkpoints",
+    "conda-env",
+    "credentials",
+    "data/processed",
+    "data/raw",
+    "datasets",
+    "env",
+    "envs",
+    "htmlcov",
+    "logs",
+    "node_modules",
+    "outputs",
+    "plots",
+    "private",
+    "secrets",
+    "temp",
+    "tmp",
+    "venv",
+    "virtualenv",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]

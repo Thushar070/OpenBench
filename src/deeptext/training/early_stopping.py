@@ -17,7 +17,7 @@ class EarlyStoppingUpdate:
 
 
 class EarlyStopping:
-    """Stop after a patience window without a ``min_delta`` F1 improvement.
+    """Stop after a patience window without a ``min_delta`` score improvement.
 
     ``best_score`` and ``best_epoch`` track every strict F1 improvement, so
     checkpoint selection is independent from the threshold used for patience.
@@ -42,14 +42,14 @@ class EarlyStopping:
         self._patience_score: float | None = None
 
     def update(self, score: float, epoch: int) -> EarlyStoppingUpdate:
-        """Record a validation F1 and report best, significant gain, and stop."""
+        """Record a validation score and report best, significant gain, and stop."""
         if (
             isinstance(score, bool)
             or not isinstance(score, (int, float))
             or not math.isfinite(score)
             or not 0 <= score <= 1
         ):
-            raise ValueError("validation F1 must be finite and between 0 and 1.")
+            raise ValueError("validation score must be finite and between 0 and 1.")
         if isinstance(epoch, bool) or not isinstance(epoch, int) or epoch < 1:
             raise ValueError("epoch must be a positive integer.")
 
@@ -71,7 +71,7 @@ class EarlyStopping:
         should_stop = self.bad_epochs >= self.patience
         if should_stop:
             self.stopping_reason = (
-                f"Validation F1 did not improve by more than {self.min_delta:g} "
+                f"Validation score did not improve by more than {self.min_delta:g} "
                 f"for {self.patience} consecutive epoch(s)."
             )
         return EarlyStoppingUpdate(

@@ -102,7 +102,7 @@ class NeuralSentimentPredictor:
             ):
                 if not all(math.isfinite(value) for value in class_probabilities):
                     raise RuntimeError(
-                        "TextCNN produced a non-finite prediction probability."
+                        "Neural model produced a non-finite prediction probability."
                     )
                 if not math.isclose(
                     sum(class_probabilities), 1.0, rel_tol=1e-5, abs_tol=1e-6

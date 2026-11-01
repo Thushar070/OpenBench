@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import numpy as np
@@ -7,6 +8,7 @@ from torch import nn
 from torch.utils.data import DataLoader
 
 from deeptext.data.torch_dataset import TextReviewDataset, create_data_loaders
+from deeptext.experiments import recovery
 from deeptext.inference.predictor import (
     TextCNNSentimentPredictor,
     load_textcnn_predictor,
@@ -247,6 +249,108 @@ def test_checkpoint_manager_saves_only_strict_best_and_refuses_run_overwrite(
         CheckpointManager(run_directory, vocabulary)
 
 
+def test_checkpoint_manager_supports_an_explicit_selection_metric(
+    tmp_path: Path,
+) -> None:
+    vocabulary, _, _ = _training_fixture()
+    model = _training_model(vocabulary)
+    run_directory = tmp_path / "combined-selection"
+    manager = CheckpointManager(
+        run_directory, vocabulary, selection_metric="selection_score"
+    )
+
+    assert manager.save_best(model, 1, {"selection_score": 0.6}) is True
+    assert manager.save_best(model, 2, {"selection_score": 0.7}) is True
+    manager.finalize([], {"experiment_id": "combined-selection-test"})
+    metadata = json.loads((run_directory / "metadata.json").read_text(encoding="utf-8"))
+
+    assert manager.best_epoch == 2
+    assert metadata["selection_metric"] == "selection_score"
+    assert metadata["best_validation_score"] == pytest.approx(0.7)
+    assert "best_validation_f1" not in metadata
+
+
+def test_official_test_gate_requires_every_pretest_check() -> None:
+    assert recovery._pre_test_acceptance_passes({"api": True, "parity": True})
+    assert not recovery._pre_test_acceptance_passes({"api": True, "polarity": False})
+    assert not recovery._pre_test_acceptance_passes({})
+
+
+def test_recovery_candidate_selects_checkpoint_on_full_and_short_validation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vocabulary, training_dataset, validation_dataset = _training_fixture()
+    training_loader, validation_loader = create_data_loaders(
+        training_dataset, validation_dataset, batch_size=2, seed=7
+    )
+    model = _training_model(vocabulary)
+    manager = CheckpointManager(
+        tmp_path / "recovery-candidate",
+        vocabulary,
+        selection_metric="selection_score",
+    )
+    epoch_metrics = iter(
+        [
+            {"loss": 0.5, "accuracy": 0.5, "precision": 0.5, "recall": 0.5, "f1": 0.5},
+            {"loss": 0.4, "accuracy": 0.7, "precision": 0.7, "recall": 0.7, "f1": 0.7},
+            {"loss": 0.8, "accuracy": 0.4, "precision": 0.4, "recall": 0.4, "f1": 0.4},
+            {"loss": 0.7, "accuracy": 0.5, "precision": 0.5, "recall": 0.5, "f1": 0.5},
+            {"loss": 0.5, "accuracy": 0.5, "precision": 0.5, "recall": 0.5, "f1": 0.5},
+            {"loss": 0.4, "accuracy": 0.6, "precision": 0.6, "recall": 0.6, "f1": 0.6},
+            {"loss": 0.3, "accuracy": 0.9, "precision": 0.9, "recall": 0.9, "f1": 0.9},
+            {"loss": 0.2, "accuracy": 0.9, "precision": 0.9, "recall": 0.9, "f1": 0.9},
+        ]
+    )
+    monkeypatch.setattr(
+        recovery, "run_epoch", lambda *args, **kwargs: next(epoch_metrics)
+    )
+
+    best_epoch, _, history = recovery._train_candidate_with_short_validation(
+        model,
+        training_loader,
+        validation_loader,
+        validation_loader,
+        validation_loader,
+        TrainingConfig(max_epochs=2, patience=3, min_delta=0, device="cpu"),
+        manager,
+    )
+    manager.finalize(history, {"experiment_id": "recovery-candidate-test"})
+
+    assert best_epoch == 2
+    assert manager.best_epoch == 2
+    assert history[0]["selection_score"] == pytest.approx(0.525)
+    assert history[1]["selection_score"] == pytest.approx(0.81)
+
+
+def test_recovery_candidate_training_smoke(tmp_path: Path) -> None:
+    vocabulary, training_dataset, validation_dataset = _training_fixture()
+    training_loader, validation_loader = create_data_loaders(
+        training_dataset, validation_dataset, batch_size=2, seed=7
+    )
+    model = _training_model(vocabulary)
+    manager = CheckpointManager(
+        tmp_path / "recovery-smoke",
+        vocabulary,
+        selection_metric="selection_score",
+    )
+
+    best_epoch, _, history = recovery._train_candidate_with_short_validation(
+        model,
+        training_loader,
+        validation_loader,
+        validation_loader,
+        validation_loader,
+        TrainingConfig(max_epochs=1, patience=1, device="cpu"),
+        manager,
+    )
+    manager.finalize(history, {"experiment_id": "recovery-smoke-test"})
+
+    assert best_epoch == 1
+    assert manager.checkpoint_path.is_file()
+    assert 0 <= history[0]["selection_score"] <= 1
+    assert "sentence_validation_f1" in history[0]
+
+
 def test_checkpoint_loader_rejects_missing_and_incompatible_files(
     tmp_path: Path,
 ) -> None:
@@ -352,3 +456,39 @@ def test_training_checkpoint_is_best_validation_f1_and_loads_on_cpu(
         recorded_best["validation_f1"]
     )
     assert next(loaded_model.parameters()).device.type == "cpu"
+
+
+def test_run_epoch_applies_configured_gradient_clipping(monkeypatch) -> None:
+    vocabulary, training_dataset, _ = _training_fixture()
+    loader, _ = create_data_loaders(
+        training_dataset,
+        training_dataset,
+        batch_size=2,
+        seed=7,
+    )
+    model = _training_model(vocabulary)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
+    calls: list[float] = []
+
+    def record_clip(parameters, max_norm):
+        calls.append(max_norm)
+        return torch.tensor(0.0)
+
+    monkeypatch.setattr(torch.nn.utils, "clip_grad_norm_", record_clip)
+    metrics = run_epoch(
+        model,
+        loader,
+        nn.CrossEntropyLoss(),
+        "cpu",
+        optimizer,
+        max_gradient_norm=0.75,
+    )
+
+    assert calls == [0.75] * len(loader)
+    assert np.isfinite(metrics["loss"])
+
+
+def test_training_config_validates_gradient_clip() -> None:
+    assert TrainingConfig(max_gradient_norm=1.0).to_dict()["max_gradient_norm"] == 1.0
+    with pytest.raises(ValueError, match="max_gradient_norm"):
+        TrainingConfig(max_gradient_norm=0)

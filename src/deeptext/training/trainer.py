@@ -30,6 +30,7 @@ class TrainingConfig:
     seed: int = 42
     device: str = "auto"
     deterministic: bool = True
+    max_gradient_norm: float | None = None
 
     def __post_init__(self) -> None:
         if (
@@ -68,8 +69,15 @@ class TrainingConfig:
             raise TypeError("device must be 'auto', 'cpu', or a torch device string.")
         if not isinstance(self.deterministic, bool):
             raise TypeError("deterministic must be a boolean.")
+        if self.max_gradient_norm is not None and (
+            isinstance(self.max_gradient_norm, bool)
+            or not isinstance(self.max_gradient_norm, (int, float))
+            or not math.isfinite(self.max_gradient_norm)
+            or self.max_gradient_norm <= 0
+        ):
+            raise ValueError("max_gradient_norm must be positive or None.")
 
-    def to_dict(self) -> dict[str, int | float | str | bool]:
+    def to_dict(self) -> dict[str, int | float | str | bool | None]:
         """Return a JSON-friendly training configuration."""
         return asdict(self)
 
@@ -121,6 +129,7 @@ def run_epoch(
     loss_function: nn.Module,
     device: str | torch.device,
     optimizer: torch.optim.Optimizer | None = None,
+    max_gradient_norm: float | None = None,
 ) -> dict[str, float]:
     """Run one training epoch or one gradient-free evaluation pass."""
     if len(data_loader) == 0:
@@ -160,6 +169,10 @@ def run_epoch(
                 raise ValueError("loss_function must return a scalar loss.")
             if training:
                 loss.backward()
+                if max_gradient_norm is not None:
+                    torch.nn.utils.clip_grad_norm_(
+                        model.parameters(), max_gradient_norm
+                    )
                 optimizer.step()
 
             batch_size = labels.size(0)
@@ -225,7 +238,12 @@ def train_neural_model(
     for epoch in range(1, settings.max_epochs + 1):
         epoch_started = time.perf_counter()
         training_metrics = run_epoch(
-            model, training_loader, criterion, target_device, optimizer
+            model,
+            training_loader,
+            criterion,
+            target_device,
+            optimizer,
+            settings.max_gradient_norm,
         )
         validation_metrics = run_epoch(
             model, validation_loader, criterion, target_device

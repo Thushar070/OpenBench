@@ -1,1 +1,1 @@
-"""Read-only dashboard data and Streamlit application components."""
+"""Read-only dashboard data access, API, and local inference components."""
